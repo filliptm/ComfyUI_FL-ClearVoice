@@ -2,7 +2,7 @@
 name = "comfyui_fl-clearvoice"
 description = "FL ClearVoice - Audio enhancement nodes for ComfyUI. Features speech enhancement, super-resolution, denoising, and audio restoration using ClearVoice, Resemble-Enhance, and VoiceFixer models. Supports multiple backends with automatic model downloading."
 version = "1.0.0"
-license = "MIT"
+license = {text = "MIT"}
 dependencies = [
     "torch>=2.0.0",
     "torchaudio>=2.0.0",

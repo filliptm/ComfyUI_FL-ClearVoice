@@ -1,0 +1,23 @@
+# FL ClearVoice Dependencies
+# ===========================
+
+# Core dependencies
+clearvoice
+torch>=2.0.0
+torchaudio>=2.0.0
+numpy>=1.24.0
+soundfile>=0.12.0
+librosa>=0.10.0
+scipy>=1.10.0
+
+# Pin transformers to avoid PyTorch 2.1.x compatibility issues
+# (newer versions require PyTorch 2.4+)
+transformers<4.46.0
+
+# Optional: Resemble-Enhance (for Resemble_Enhance and Resemble_Denoise models)
+# Install with: pip install resemble-enhance
+# resemble-enhance
+
+# Optional: VoiceFixer (for VoiceFixer model)
+# Install with: pip install voicefixer
+# voicefixer

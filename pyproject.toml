@@ -1,51 +1,25 @@
-[build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
-name = "comfyui-fl-clearvoice"
+name = "comfyui_fl-clearvoice"
+description = "FL ClearVoice - Audio enhancement nodes for ComfyUI. Features speech enhancement, super-resolution, denoising, and audio restoration using ClearVoice, Resemble-Enhance, and VoiceFixer models. Supports multiple backends with automatic model downloading."
 version = "1.0.0"
-description = "ComfyUI nodes for ClearVoice speech enhancement and super-resolution"
-readme = "README.md"
-license = {text = "MIT"}
-requires-python = ">=3.10"
-authors = [
-    {name = "FL Nodes"}
-]
-keywords = [
-    "comfyui",
-    "audio",
-    "speech-enhancement",
-    "super-resolution",
-    "clearvoice",
-    "denoising",
-]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Multimedia :: Sound/Audio",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
-]
-
+license = "MIT"
 dependencies = [
-    "clearvoice",
     "torch>=2.0.0",
     "torchaudio>=2.0.0",
     "numpy>=1.24.0",
     "soundfile>=0.12.0",
     "librosa>=0.10.0",
     "scipy>=1.10.0",
+    "clearvoice",
+    "huggingface_hub",
+    "voicefixer",
+    "resemble-enhance",
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/modelscope/ClearerVoice-Studio"
-"Bug Tracker" = "https://github.com/modelscope/ClearerVoice-Studio/issues"
+Repository = "https://github.com/filliptm/ComfyUI_FL-ClearVoice"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["fl_nodes*", "fl_utils*"]
+[tool.comfy]
+PublisherId = "machinedelusions"
+DisplayName = "FL ClearVoice"
+Icon = ""

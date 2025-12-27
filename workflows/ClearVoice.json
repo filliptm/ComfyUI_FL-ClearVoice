@@ -1,0 +1,797 @@
+{
+  "id": "84bb68ab-97dc-4750-ac84-c6a9b4f00be8",
+  "revision": 0,
+  "last_node_id": 27,
+  "last_link_id": 42,
+  "nodes": [
+    {
+      "id": 6,
+      "type": "FL_ClearVoice_ModelLoader",
+      "pos": [
+        425.62724898894356,
+        -74.91865763114002
+      ],
+      "size": [
+        287.3140625,
+        82
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "model",
+          "type": "CLEARVOICE_MODEL",
+          "links": [
+            4
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "FL_ClearVoice_ModelLoader"
+      },
+      "widgets_values": [
+        "MossFormer2_SR_48K",
+        false
+      ],
+      "color": "#16727c",
+      "bgcolor": "#4F0074"
+    },
+    {
+      "id": 2,
+      "type": "FL_ClearVoice_ModelLoader",
+      "pos": [
+        93.90849898894224,
+        -75.80381388114039
+      ],
+      "size": [
+        287.3140625,
+        82
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "model",
+          "type": "CLEARVOICE_MODEL",
+          "links": [
+            1
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "FL_ClearVoice_ModelLoader"
+      },
+      "widgets_values": [
+        "MossFormer2_SE_48K",
+        false
+      ],
+      "color": "#16727c",
+      "bgcolor": "#4F0074"
+    },
+    {
+      "id": 23,
+      "type": "FL_ClearVoice_Process",
+      "pos": [
+        1487.9774524602021,
+        71.37584190759229
+      ],
+      "size": [
+        189.210546875,
+        46
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "CLEARVOICE_MODEL",
+          "link": 30
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 33
+        }
+      ],
+      "outputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": [
+            29
+          ]
+        },
+        {
+          "name": "message",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "FL_ClearVoice_Process"
+      },
+      "widgets_values": [],
+      "color": "#16727c",
+      "bgcolor": "#4F0074"
+    },
+    {
+      "id": 21,
+      "type": "FL_ClearVoice_ModelLoader",
+      "pos": [
+        1099.9008899602043,
+        -82.10122840490824
+      ],
+      "size": [
+        287.3140625,
+        82
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "model",
+          "type": "CLEARVOICE_MODEL",
+          "links": [
+            27
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "FL_ClearVoice_ModelLoader"
+      },
+      "widgets_values": [
+        "Resemble_Enhance",
+        false
+      ],
+      "color": "#16727c",
+      "bgcolor": "#4F0074"
+    },
+    {
+      "id": 13,
+      "type": "FL_ClearVoice_Process",
+      "pos": [
+        825.128848189503,
+        61.53908517568007
+      ],
+      "size": [
+        189.210546875,
+        46
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "CLEARVOICE_MODEL",
+          "link": 16
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 40
+        }
+      ],
+      "outputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": [
+            18,
+            32
+          ]
+        },
+        {
+          "name": "message",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "FL_ClearVoice_Process"
+      },
+      "widgets_values": [],
+      "color": "#16727c",
+      "bgcolor": "#4F0074"
+    },
+    {
+      "id": 20,
+      "type": "FL_ClearVoice_Process",
+      "pos": [
+        1160.9465930852034,
+        65.21713097009184
+      ],
+      "size": [
+        189.210546875,
+        46
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "CLEARVOICE_MODEL",
+          "link": 27
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 32
+        }
+      ],
+      "outputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": [
+            26,
+            33
+          ]
+        },
+        {
+          "name": "message",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "FL_ClearVoice_Process"
+      },
+      "widgets_values": [],
+      "color": "#16727c",
+      "bgcolor": "#4F0074"
+    },
+    {
+      "id": 24,
+      "type": "FL_ClearVoice_ModelLoader",
+      "pos": [
+        1426.931749335203,
+        -75.942517467408
+      ],
+      "size": [
+        287.3140625,
+        82
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "model",
+          "type": "CLEARVOICE_MODEL",
+          "links": [
+            30
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "FL_ClearVoice_ModelLoader"
+      },
+      "widgets_values": [
+        "VoiceFixer",
+        false
+      ],
+      "color": "#16727c",
+      "bgcolor": "#4F0074"
+    },
+    {
+      "id": 14,
+      "type": "FL_ClearVoice_ModelLoader",
+      "pos": [
+        757.1103916910662,
+        -81.40227290049172
+      ],
+      "size": [
+        287.3140625,
+        82
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "model",
+          "type": "CLEARVOICE_MODEL",
+          "links": [
+            16
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "FL_ClearVoice_ModelLoader"
+      },
+      "widgets_values": [
+        "Resemble_Denoise",
+        false
+      ],
+      "color": "#16727c",
+      "bgcolor": "#4F0074"
+    },
+    {
+      "id": 3,
+      "type": "FL_ClearVoice_Process",
+      "pos": [
+        152.9819364889427,
+        66.58602986885944
+      ],
+      "size": [
+        189.210546875,
+        46
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "CLEARVOICE_MODEL",
+          "link": 1
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 42
+        }
+      ],
+      "outputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": [
+            3,
+            39
+          ]
+        },
+        {
+          "name": "message",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "FL_ClearVoice_Process"
+      },
+      "widgets_values": [],
+      "color": "#16727c",
+      "bgcolor": "#4F0074"
+    },
+    {
+      "id": 5,
+      "type": "FL_ClearVoice_Process",
+      "pos": [
+        486.6729521139425,
+        72.39970174385965
+      ],
+      "size": [
+        189.210546875,
+        46
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "CLEARVOICE_MODEL",
+          "link": 4
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 39
+        }
+      ],
+      "outputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": [
+            6,
+            40
+          ]
+        },
+        {
+          "name": "message",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "FL_ClearVoice_Process"
+      },
+      "widgets_values": [],
+      "color": "#16727c",
+      "bgcolor": "#4F0074"
+    },
+    {
+      "id": 1,
+      "type": "LoadAudio",
+      "pos": [
+        -278.0346299173074,
+        -111.57516934989066
+      ],
+      "size": [
+        282.798828125,
+        136
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            14
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.5.1",
+        "Node name for S&R": "LoadAudio"
+      },
+      "widgets_values": [
+        "2025-12-25 13-35-11.mov",
+        null,
+        null
+      ]
+    },
+    {
+      "id": 4,
+      "type": "PreviewAudio",
+      "pos": [
+        115.90420211394259,
+        169.10946736885893
+      ],
+      "size": [
+        270,
+        88
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 3
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.5.1",
+        "Node name for S&R": "PreviewAudio"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 7,
+      "type": "PreviewAudio",
+      "pos": [
+        447.6229521139433,
+        169.99462361885878
+      ],
+      "size": [
+        270,
+        88
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 6
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.5.1",
+        "Node name for S&R": "PreviewAudio"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 15,
+      "type": "PreviewAudio",
+      "pos": [
+        779.1060948160662,
+        163.51100834950697
+      ],
+      "size": [
+        270,
+        88
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 18
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.5.1",
+        "Node name for S&R": "PreviewAudio"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 19,
+      "type": "PreviewAudio",
+      "pos": [
+        1121.8965930852041,
+        162.8120528450908
+      ],
+      "size": [
+        270,
+        88
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 26
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.5.1",
+        "Node name for S&R": "PreviewAudio"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 22,
+      "type": "PreviewAudio",
+      "pos": [
+        1448.9274524602033,
+        168.97076378259115
+      ],
+      "size": [
+        270,
+        88
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 29
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.5.1",
+        "Node name for S&R": "PreviewAudio"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 9,
+      "type": "FL_Audio_Crop",
+      "pos": [
+        -269.5265596048069,
+        85.35495174385866
+      ],
+      "size": [
+        270,
+        82
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 14
+        }
+      ],
+      "outputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": [
+            42
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui_fill-nodes",
+        "ver": "487fded794915aa8c9c553413a948b5d4f993e09",
+        "Node name for S&R": "FL_Audio_Crop"
+      },
+      "widgets_values": [
+        "0:00",
+        "0:10"
+      ],
+      "color": "#16727c",
+      "bgcolor": "#4F0074"
+    }
+  ],
+  "links": [
+    [
+      1,
+      2,
+      0,
+      3,
+      0,
+      "CLEARVOICE_MODEL"
+    ],
+    [
+      3,
+      3,
+      0,
+      4,
+      0,
+      "AUDIO"
+    ],
+    [
+      4,
+      6,
+      0,
+      5,
+      0,
+      "CLEARVOICE_MODEL"
+    ],
+    [
+      6,
+      5,
+      0,
+      7,
+      0,
+      "AUDIO"
+    ],
+    [
+      14,
+      1,
+      0,
+      9,
+      0,
+      "AUDIO"
+    ],
+    [
+      16,
+      14,
+      0,
+      13,
+      0,
+      "CLEARVOICE_MODEL"
+    ],
+    [
+      18,
+      13,
+      0,
+      15,
+      0,
+      "AUDIO"
+    ],
+    [
+      26,
+      20,
+      0,
+      19,
+      0,
+      "AUDIO"
+    ],
+    [
+      27,
+      21,
+      0,
+      20,
+      0,
+      "CLEARVOICE_MODEL"
+    ],
+    [
+      29,
+      23,
+      0,
+      22,
+      0,
+      "AUDIO"
+    ],
+    [
+      30,
+      24,
+      0,
+      23,
+      0,
+      "CLEARVOICE_MODEL"
+    ],
+    [
+      32,
+      13,
+      0,
+      20,
+      1,
+      "AUDIO"
+    ],
+    [
+      33,
+      20,
+      0,
+      23,
+      1,
+      "AUDIO"
+    ],
+    [
+      39,
+      3,
+      0,
+      5,
+      1,
+      "AUDIO"
+    ],
+    [
+      40,
+      5,
+      0,
+      13,
+      1,
+      "AUDIO"
+    ],
+    [
+      42,
+      9,
+      0,
+      3,
+      1,
+      "AUDIO"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "Group",
+      "bounding": [
+        -288.0346299173074,
+        -185.17516934989064,
+        2016.9620823775108,
+        453.16979296874945
+      ],
+      "color": "#3f789e",
+      "font_size": 24,
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.6830134553650705,
+      "offset": [
+        594.5648903155153,
+        623.4156380069472
+      ]
+    },
+    "workflowRendererVersion": "LG",
+    "frontendVersion": "1.34.9"
+  },
+  "version": 0.4
+}

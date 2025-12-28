@@ -16,20 +16,11 @@ from .hparams import EnhancerHParams, DenoiserHParams
 
 logger = logging.getLogger(__name__)
 
-# Model download location - use ComfyUI models directory
+# Model download location - use centralized clear_voice directory
 def get_models_dir():
     """Get the models directory for Resemble-Enhance."""
-    # Try to use ComfyUI's models directory
-    current_dir = Path(__file__).parent
-    # Go up to ComfyUI root: fl_utils/resemble_enhance -> fl_utils -> ComfyUI_FL-ClearVoice -> custom_nodes -> ComfyUI
-    comfyui_root = current_dir.parent.parent.parent.parent
-    models_dir = comfyui_root / "models" / "resemble_enhance"
-
-    # Fallback to local directory if ComfyUI structure not found
-    if not comfyui_root.exists():
-        models_dir = current_dir / "model_repo"
-
-    return models_dir
+    from ..paths import get_resemble_enhance_dir
+    return get_resemble_enhance_dir()
 
 REPO_ID = "ResembleAI/resemble-enhance"
 

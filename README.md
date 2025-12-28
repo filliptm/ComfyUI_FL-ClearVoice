@@ -67,7 +67,17 @@ pip install -r requirements.txt
 |-------|------|-----------|-------|
 | VoiceFixer | Restoration | 44.1kHz | All-in-one audio restoration |
 
-Models download automatically on first use.
+Models download automatically on first use to `ComfyUI/models/clear_voice/`:
+
+```
+ComfyUI/models/clear_voice/
+├── clearvoice/           # ClearVoice models
+│   ├── MossFormer2_SE_48K/
+│   ├── FRCRN_SE_16K/
+│   └── ...
+├── resemble_enhance/     # Resemble-Enhance models
+└── voicefixer/           # VoiceFixer models
+```
 
 ## Requirements
 

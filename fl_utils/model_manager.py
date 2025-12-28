@@ -1,11 +1,16 @@
 """
 Model manager for FL-ClearVoice
 Handles ClearVoice model loading and caching
+
+All models download to: ComfyUI/models/clear_voice/
 """
 
 import torch
 import numpy as np
+from pathlib import Path
 from typing import Dict, Any, Optional
+
+from .paths import get_clearvoice_models_dir, get_clearvoice_backend_dir, get_voicefixer_dir
 
 
 def _patch_clearvoice_sr_decode():
@@ -118,6 +123,44 @@ def _patch_clearvoice_sr_decode():
 
 # Apply patch on module load
 _SR_PATCH_APPLIED = _patch_clearvoice_sr_decode()
+
+
+def _patch_clearvoice_checkpoint_dir():
+    """
+    Monkey-patch ClearVoice's network_wrapper to use our centralized model directory.
+
+    ClearVoice downloads models to `checkpoint_dir` which defaults to relative paths
+    like 'checkpoints/MossFormer2_SE_48K'. We patch it to use our centralized location:
+    ComfyUI/models/clear_voice/clearvoice/{model_name}/
+    """
+    try:
+        import clearvoice.network_wrapper as nw
+
+        # Store original __call__ method
+        original_call = nw.network_wrapper.__call__
+
+        def patched_call(self, task, model_name):
+            # Call original to parse args and setup
+            result = original_call(self, task, model_name)
+
+            # Override checkpoint_dir to our centralized location
+            our_checkpoint_dir = get_clearvoice_backend_dir(model_name)
+            self.args.checkpoint_dir = str(our_checkpoint_dir)
+
+            return result
+
+        # Apply the patch
+        nw.network_wrapper.__call__ = patched_call
+        print(f"[FL ClearVoice] Model download path: {get_clearvoice_models_dir()}")
+        return True
+
+    except Exception as e:
+        print(f"[FL ClearVoice] Warning: Could not patch checkpoint dir: {e}")
+        return False
+
+
+# Apply checkpoint dir patch on module load
+_CHECKPOINT_PATCH_APPLIED = _patch_clearvoice_checkpoint_dir()
 
 # Model configuration
 # NOTE: ClearVoice internally uses these tasks:
@@ -383,6 +426,54 @@ def get_resemble_enhance_model(
     return model_info
 
 
+def _setup_voicefixer_path():
+    """
+    Set up VoiceFixer to use our centralized model directory.
+
+    VoiceFixer hardcodes ~/.cache/voicefixer/ as its model path.
+    We download models to our location and create a symlink.
+    """
+    import os
+
+    our_vf_dir = get_voicefixer_dir()
+    expected_cache_dir = Path.home() / ".cache" / "voicefixer"
+    expected_ckpt = expected_cache_dir / "analysis_module" / "checkpoints" / "vf.ckpt"
+    our_ckpt_dir = our_vf_dir / "analysis_module" / "checkpoints"
+    our_ckpt = our_ckpt_dir / "vf.ckpt"
+
+    # If model exists in our location but not in expected location, create symlink
+    if our_ckpt.exists() and not expected_ckpt.exists():
+        print(f"[FL ClearVoice] Creating VoiceFixer symlink from cache to {our_vf_dir}")
+        expected_cache_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            # Create symlink from ~/.cache/voicefixer -> our_vf_dir
+            if expected_cache_dir.is_symlink():
+                expected_cache_dir.unlink()
+            elif expected_cache_dir.exists():
+                # Directory exists but isn't a symlink - leave it alone
+                return
+            expected_cache_dir.symlink_to(our_vf_dir)
+        except Exception as e:
+            print(f"[FL ClearVoice] Could not create symlink: {e}")
+
+    # If model doesn't exist anywhere, download to our location first
+    # Then create symlink so VoiceFixer finds it
+    if not our_ckpt.exists() and not expected_ckpt.exists():
+        print(f"[FL ClearVoice] VoiceFixer model will download to: {our_vf_dir}")
+        # Create our directory structure
+        our_ckpt_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create symlink before download so VoiceFixer downloads to our location
+        expected_cache_dir.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            if expected_cache_dir.is_symlink():
+                expected_cache_dir.unlink()
+            if not expected_cache_dir.exists():
+                expected_cache_dir.symlink_to(our_vf_dir)
+        except Exception as e:
+            print(f"[FL ClearVoice] Could not create symlink: {e}")
+
+
 def get_voicefixer_model(
     force_reload: bool = False
 ) -> Dict[str, Any]:
@@ -407,6 +498,9 @@ def get_voicefixer_model(
             return cached
 
     print(f"[FL ClearVoice] Loading VoiceFixer model...")
+
+    # Setup our centralized path before importing VoiceFixer
+    _setup_voicefixer_path()
 
     # Import VoiceFixer
     try:

@@ -7,47 +7,108 @@ importing the train.py files that depend on deepspeed.
 
 import logging
 import os
+import sys
+import importlib.util
 from functools import cache
 from pathlib import Path
 
 import torch
 
-from .hparams import EnhancerHParams, DenoiserHParams
+# Handle both package-style and direct imports
+try:
+    from .hparams import EnhancerHParams, DenoiserHParams
+except ImportError:
+    # Fallback for when loaded outside package context
+    if "fl_resemble_enhance.hparams" in sys.modules:
+        hparams_module = sys.modules["fl_resemble_enhance.hparams"]
+        EnhancerHParams = hparams_module.EnhancerHParams
+        DenoiserHParams = hparams_module.DenoiserHParams
+    else:
+        from hparams import EnhancerHParams, DenoiserHParams
 
 logger = logging.getLogger(__name__)
+
+
+def _get_cv_paths_module():
+    """Get the cv_paths module, loading it if necessary."""
+    cv_paths = sys.modules.get('cv_paths')
+    if cv_paths is None:
+        # Fallback: load directly if running standalone
+        current_dir = Path(__file__).parent.parent  # fl_utils directory
+        spec = importlib.util.spec_from_file_location("cv_paths", current_dir / "paths.py")
+        cv_paths = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cv_paths)
+    return cv_paths
+
+
+def _get_download_utils_module():
+    """Get the download_utils module, loading it if necessary."""
+    download_utils = sys.modules.get('cv_download_utils')
+    if download_utils is None:
+        # Fallback: load directly if running standalone
+        current_dir = Path(__file__).parent.parent  # fl_utils directory
+        spec = importlib.util.spec_from_file_location("cv_download_utils", current_dir / "download_utils.py")
+        download_utils = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(download_utils)
+    return download_utils
+
 
 # Model download location - use centralized clear_voice directory
 def get_models_dir():
     """Get the models directory for Resemble-Enhance."""
-    from ..paths import get_resemble_enhance_dir
-    return get_resemble_enhance_dir()
+    cv_paths = _get_cv_paths_module()
+    return cv_paths.get_resemble_enhance_dir()
 
 REPO_ID = "ResembleAI/resemble-enhance"
 
+# Files needed for Resemble-Enhance
+RESEMBLE_ENHANCE_FILES = [
+    "enhancer_stage2/hparams.yaml",
+    "enhancer_stage2/ds/G/default/mp_rank_00_model_states.pt",
+    "denoiser/hparams.yaml",
+    "denoiser/ds/G/default/mp_rank_00_model_states.pt",
+]
+
 
 def download_models():
-    """Download the Resemble-Enhance models from HuggingFace using huggingface_hub."""
-    try:
-        from huggingface_hub import snapshot_download
-    except ImportError:
-        raise RuntimeError(
-            "huggingface_hub not installed. Please install with: pip install huggingface_hub"
-        )
-
+    """Download the Resemble-Enhance models from HuggingFace with progress bars."""
     models_dir = get_models_dir()
     models_dir.mkdir(parents=True, exist_ok=True)
 
+    run_dir = models_dir / "enhancer_stage2"
+
+    # Check if already downloaded
+    required_file = run_dir / "ds" / "G" / "default" / "mp_rank_00_model_states.pt"
+    if required_file.exists():
+        logger.info(f"[FL ClearVoice] Resemble-Enhance models already downloaded at {run_dir}")
+        return run_dir
+
     print(f"[FL ClearVoice] Downloading Resemble-Enhance models to {models_dir}...")
-    print("[FL ClearVoice] This may take a while on first run...")
 
-    # Download the entire repo using huggingface_hub (handles LFS automatically)
-    local_dir = snapshot_download(
-        repo_id=REPO_ID,
-        local_dir=str(models_dir),
-        local_dir_use_symlinks=False,
-    )
+    try:
+        # Use our custom download utility with progress bars
+        download_utils = _get_download_utils_module()
+        download_utils.download_with_progress(
+            repo_id=REPO_ID,
+            filenames=RESEMBLE_ENHANCE_FILES,
+            local_dir=models_dir,
+            prefix="[FL ClearVoice]"
+        )
+    except (ImportError, Exception) as e:
+        # Fallback to standard huggingface_hub if our utility fails
+        logger.warning("[FL ClearVoice] Custom download utility not available, using standard download")
+        try:
+            from huggingface_hub import snapshot_download
+        except ImportError:
+            raise RuntimeError(
+                "huggingface_hub not installed. Please install with: pip install huggingface_hub"
+            )
 
-    run_dir = Path(local_dir) / "enhancer_stage2"
+        snapshot_download(
+            repo_id=REPO_ID,
+            local_dir=str(models_dir),
+            local_dir_use_symlinks=False,
+        )
 
     if not run_dir.exists():
         raise RuntimeError(
@@ -55,7 +116,7 @@ def download_models():
             "Download may have failed."
         )
 
-    print(f"[FL ClearVoice] Models downloaded to {run_dir}")
+    print(f"[FL ClearVoice] Resemble-Enhance models ready at {run_dir}")
     return run_dir
 
 
@@ -64,7 +125,14 @@ def _load_enhancer_model(run_dir, device):
     Load enhancer model using our local standalone implementation.
     This bypasses the deepspeed import chain entirely.
     """
-    from .enhancer import Enhancer
+    # Handle both package-style and direct imports
+    try:
+        from .enhancer import Enhancer
+    except ImportError:
+        if "fl_resemble_enhance.enhancer" in sys.modules:
+            Enhancer = sys.modules["fl_resemble_enhance.enhancer"].Enhancer
+        else:
+            from enhancer import Enhancer
 
     hp = EnhancerHParams.load(run_dir)
     enhancer = Enhancer(hp)

@@ -3,6 +3,7 @@ Enhancer model - extracted from resemble_enhance without deepspeed dependency.
 """
 
 import logging
+import sys
 from functools import cache
 from pathlib import Path
 
@@ -10,8 +11,21 @@ import torch
 from torch import Tensor, nn
 from torch.distributions import Beta
 
-from .denoiser import Denoiser
-from .hparams import DenoiserHParams
+# Handle both package-style and direct imports
+try:
+    from .denoiser import Denoiser
+    from .hparams import DenoiserHParams
+except ImportError:
+    # Fallback for when loaded outside package context
+    if "fl_resemble_enhance.denoiser" in sys.modules:
+        Denoiser = sys.modules["fl_resemble_enhance.denoiser"].Denoiser
+    else:
+        from denoiser import Denoiser
+
+    if "fl_resemble_enhance.hparams" in sys.modules:
+        DenoiserHParams = sys.modules["fl_resemble_enhance.hparams"].DenoiserHParams
+    else:
+        from hparams import DenoiserHParams
 
 logger = logging.getLogger(__name__)
 

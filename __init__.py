@@ -23,6 +23,15 @@ def import_module_from_path(module_name, file_path):
     return module
 
 # Import utilities first (needed by nodes)
+# Load paths module first (required by model_manager and fl_resemble_enhance)
+cv_paths = import_module_from_path(
+    "cv_paths",
+    os.path.join(current_dir, "fl_utils", "paths.py")
+)
+cv_download_utils = import_module_from_path(
+    "cv_download_utils",
+    os.path.join(current_dir, "fl_utils", "download_utils.py")
+)
 cv_audio_utils = import_module_from_path(
     "cv_audio_utils",
     os.path.join(current_dir, "fl_utils", "audio_utils.py")

@@ -15,6 +15,8 @@ Audio enhancement nodes for ComfyUI featuring speech enhancement, super-resoluti
 - **Multiple Backends** - ClearVoice, Resemble-Enhance, and VoiceFixer models
 - **Automatic Resampling** - Handles sample rate conversion automatically
 - **Mono/Stereo Support** - Preserves original channel configuration
+- **Centralized Model Storage** - All models download to `ComfyUI/models/clear_voice/`
+- **Real-time Download Progress** - Progress bars with speed and ETA for model downloads
 
 ## Nodes
 

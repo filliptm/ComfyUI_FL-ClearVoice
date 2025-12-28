@@ -5,12 +5,27 @@ Handles ClearVoice model loading and caching
 All models download to: ComfyUI/models/clear_voice/
 """
 
+import sys
 import torch
 import numpy as np
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-from .paths import get_clearvoice_models_dir, get_clearvoice_backend_dir, get_voicefixer_dir
+# Import from cv_paths module (loaded by __init__.py before this module)
+# This avoids relative import issues when loaded via import_module_from_path
+cv_paths = sys.modules.get('cv_paths')
+if cv_paths is None:
+    # Fallback: direct import if running standalone
+    from pathlib import Path as _Path
+    _current_dir = _Path(__file__).parent
+    import importlib.util
+    _spec = importlib.util.spec_from_file_location("cv_paths", _current_dir / "paths.py")
+    cv_paths = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(cv_paths)
+
+get_clearvoice_models_dir = cv_paths.get_clearvoice_models_dir
+get_clearvoice_backend_dir = cv_paths.get_clearvoice_backend_dir
+get_voicefixer_dir = cv_paths.get_voicefixer_dir
 
 
 def _patch_clearvoice_sr_decode():
@@ -125,6 +140,83 @@ def _patch_clearvoice_sr_decode():
 _SR_PATCH_APPLIED = _patch_clearvoice_sr_decode()
 
 
+def _patch_clearvoice_download():
+    """
+    Monkey-patch ClearVoice's download_model method to use our progress bar utility.
+
+    The original method uses huggingface_hub.snapshot_download which shows
+    "Fetching X files" without detailed per-file progress. We replace it with
+    our download utility that shows progress bars for each file.
+    """
+    try:
+        import clearvoice.networks as networks
+
+        # Get original method (for fallback)
+        original_download = networks.SpeechModel.download_model
+
+        def patched_download_model(self, model_name):
+            """Download ClearVoice model with progress bars."""
+            checkpoint_dir = self.args.checkpoint_dir
+
+            # Try our download utility first
+            try:
+                # Import download utility - use absolute import path
+                import importlib.util
+                import os
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                download_utils_path = os.path.join(current_dir, "download_utils.py")
+
+                if os.path.exists(download_utils_path):
+                    spec = importlib.util.spec_from_file_location("download_utils", download_utils_path)
+                    download_utils = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(download_utils)
+
+                    from huggingface_hub import HfApi
+
+                    repo_id = f'alibabasglab/{model_name}'
+                    local_dir = Path(checkpoint_dir)
+                    local_dir.mkdir(parents=True, exist_ok=True)
+
+                    # Get list of files in the repo
+                    api = HfApi()
+                    try:
+                        repo_info = api.repo_info(repo_id=repo_id, files_metadata=True)
+                        filenames = [f.rfilename for f in repo_info.siblings if f.rfilename]
+                    except Exception as e:
+                        print(f"[FL ClearVoice] Could not fetch file list: {e}")
+                        # Fallback to original download
+                        return original_download(self, model_name)
+
+                    print(f"[FL ClearVoice] Downloading {model_name} model files...")
+
+                    downloader = download_utils.MultiFileDownloader(prefix="[FL ClearVoice]")
+                    downloader.download_hf_files(
+                        repo_id=repo_id,
+                        filenames=filenames,
+                        local_dir=local_dir
+                    )
+
+                    return True
+                else:
+                    return original_download(self, model_name)
+
+            except Exception as e:
+                print(f"[FL ClearVoice] Progress download failed: {e}, using standard download...")
+                return original_download(self, model_name)
+
+        # Apply the patch
+        networks.SpeechModel.download_model = patched_download_model
+        return True
+
+    except Exception as e:
+        print(f"[FL ClearVoice] Warning: Could not patch download method: {e}")
+        return False
+
+
+# Apply download patch on module load
+_DOWNLOAD_PATCH_APPLIED = _patch_clearvoice_download()
+
+
 def _patch_clearvoice_checkpoint_dir():
     """
     Monkey-patch ClearVoice's network_wrapper to use our centralized model directory.
@@ -132,25 +224,55 @@ def _patch_clearvoice_checkpoint_dir():
     ClearVoice downloads models to `checkpoint_dir` which defaults to relative paths
     like 'checkpoints/MossFormer2_SE_48K'. We patch it to use our centralized location:
     ComfyUI/models/clear_voice/clearvoice/{model_name}/
+
+    The key insight is that the original __call__ method:
+    1. Calls load_args_* (which sets self.args.checkpoint_dir to default path)
+    2. Then instantiates the network class (which downloads/loads using checkpoint_dir)
+
+    We need to intercept BETWEEN steps 1 and 2 to override checkpoint_dir.
+    We do this by patching the load_args_* methods to apply our override after they run.
     """
     try:
-        import clearvoice.network_wrapper as nw
+        from clearvoice.network_wrapper import network_wrapper
 
-        # Store original __call__ method
-        original_call = nw.network_wrapper.__call__
+        # Store references to original load_args methods
+        original_load_args_se = network_wrapper.load_args_se
+        original_load_args_ss = network_wrapper.load_args_ss
+        original_load_args_sr = network_wrapper.load_args_sr
+        original_load_args_tse = network_wrapper.load_args_tse
 
-        def patched_call(self, task, model_name):
-            # Call original to parse args and setup
-            result = original_call(self, task, model_name)
+        def _override_checkpoint_dir(self):
+            """Override checkpoint_dir to our centralized location after args are loaded."""
+            if hasattr(self, 'model_name') and hasattr(self, 'args'):
+                our_checkpoint_dir = get_clearvoice_backend_dir(self.model_name)
+                self.args.checkpoint_dir = str(our_checkpoint_dir)
 
-            # Override checkpoint_dir to our centralized location
-            our_checkpoint_dir = get_clearvoice_backend_dir(model_name)
-            self.args.checkpoint_dir = str(our_checkpoint_dir)
-
+        def patched_load_args_se(self):
+            result = original_load_args_se(self)
+            _override_checkpoint_dir(self)
             return result
 
-        # Apply the patch
-        nw.network_wrapper.__call__ = patched_call
+        def patched_load_args_ss(self):
+            result = original_load_args_ss(self)
+            _override_checkpoint_dir(self)
+            return result
+
+        def patched_load_args_sr(self):
+            result = original_load_args_sr(self)
+            _override_checkpoint_dir(self)
+            return result
+
+        def patched_load_args_tse(self):
+            result = original_load_args_tse(self)
+            _override_checkpoint_dir(self)
+            return result
+
+        # Apply the patches
+        network_wrapper.load_args_se = patched_load_args_se
+        network_wrapper.load_args_ss = patched_load_args_ss
+        network_wrapper.load_args_sr = patched_load_args_sr
+        network_wrapper.load_args_tse = patched_load_args_tse
+
         print(f"[FL ClearVoice] Model download path: {get_clearvoice_models_dir()}")
         return True
 
@@ -371,19 +493,74 @@ def get_resemble_enhance_model(
     print(f"[FL ClearVoice] Loading Resemble-Enhance model: {model_name}")
 
     # Import from our local standalone module (bypasses deepspeed dependency)
-    # Named fl_resemble_enhance to avoid conflict with the original package
+    # We use importlib to properly load the module and its dependencies
     try:
-        import sys
+        import importlib.util
         import os
 
-        # Get the path to fl_utils directory and add it to sys.path temporarily
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        if current_dir not in sys.path:
-            sys.path.insert(0, current_dir)
+        fl_resemble_dir = os.path.join(current_dir, "fl_resemble_enhance")
 
-        # Import from our renamed local module
-        from fl_resemble_enhance import denoise, enhance
+        # First, manually load the submodules that inference.py depends on
+        # This ensures relative imports work by having all modules in sys.modules
+
+        # Load hparams module
+        hparams_path = os.path.join(fl_resemble_dir, "hparams.py")
+        hparams_spec = importlib.util.spec_from_file_location(
+            "fl_resemble_enhance.hparams", hparams_path,
+            submodule_search_locations=[fl_resemble_dir]
+        )
+        hparams_module = importlib.util.module_from_spec(hparams_spec)
+        sys.modules["fl_resemble_enhance.hparams"] = hparams_module
+        hparams_spec.loader.exec_module(hparams_module)
+
+        # Load denoiser module
+        denoiser_path = os.path.join(fl_resemble_dir, "denoiser.py")
+        denoiser_spec = importlib.util.spec_from_file_location(
+            "fl_resemble_enhance.denoiser", denoiser_path,
+            submodule_search_locations=[fl_resemble_dir]
+        )
+        denoiser_module = importlib.util.module_from_spec(denoiser_spec)
+        sys.modules["fl_resemble_enhance.denoiser"] = denoiser_module
+        denoiser_spec.loader.exec_module(denoiser_module)
+
+        # Load enhancer module
+        enhancer_path = os.path.join(fl_resemble_dir, "enhancer.py")
+        enhancer_spec = importlib.util.spec_from_file_location(
+            "fl_resemble_enhance.enhancer", enhancer_path,
+            submodule_search_locations=[fl_resemble_dir]
+        )
+        enhancer_module = importlib.util.module_from_spec(enhancer_spec)
+        sys.modules["fl_resemble_enhance.enhancer"] = enhancer_module
+        enhancer_spec.loader.exec_module(enhancer_module)
+
+        # Load inference module
+        inference_path = os.path.join(fl_resemble_dir, "inference.py")
+        inference_spec = importlib.util.spec_from_file_location(
+            "fl_resemble_enhance.inference", inference_path,
+            submodule_search_locations=[fl_resemble_dir]
+        )
+        inference_module = importlib.util.module_from_spec(inference_spec)
+        sys.modules["fl_resemble_enhance.inference"] = inference_module
+        inference_spec.loader.exec_module(inference_module)
+
+        # Now create the package module and set it up
+        package_spec = importlib.util.spec_from_file_location(
+            "fl_resemble_enhance",
+            os.path.join(fl_resemble_dir, "__init__.py"),
+            submodule_search_locations=[fl_resemble_dir]
+        )
+        fl_resemble_enhance = importlib.util.module_from_spec(package_spec)
+        sys.modules["fl_resemble_enhance"] = fl_resemble_enhance
+        package_spec.loader.exec_module(fl_resemble_enhance)
+
+        # Get the functions
+        denoise = fl_resemble_enhance.denoise
+        enhance = fl_resemble_enhance.enhance
+
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         # Fallback error message
         raise RuntimeError(
             f"Failed to load Resemble-Enhance inference module: {e}\n"
@@ -431,7 +608,7 @@ def _setup_voicefixer_path():
     Set up VoiceFixer to use our centralized model directory.
 
     VoiceFixer hardcodes ~/.cache/voicefixer/ as its model path.
-    We download models to our location and create a symlink.
+    We download models to our location with a progress bar, then create a symlink.
     """
     import os
 
@@ -441,9 +618,11 @@ def _setup_voicefixer_path():
     our_ckpt_dir = our_vf_dir / "analysis_module" / "checkpoints"
     our_ckpt = our_ckpt_dir / "vf.ckpt"
 
+    voicefixer_url = "https://zenodo.org/record/5600188/files/vf.ckpt?download=1"
+
     # If model exists in our location but not in expected location, create symlink
     if our_ckpt.exists() and not expected_ckpt.exists():
-        print(f"[FL ClearVoice] Creating VoiceFixer symlink from cache to {our_vf_dir}")
+        print(f"[FL ClearVoice] VoiceFixer model found at {our_vf_dir}")
         expected_cache_dir.mkdir(parents=True, exist_ok=True)
         try:
             # Create symlink from ~/.cache/voicefixer -> our_vf_dir
@@ -456,14 +635,45 @@ def _setup_voicefixer_path():
         except Exception as e:
             print(f"[FL ClearVoice] Could not create symlink: {e}")
 
-    # If model doesn't exist anywhere, download to our location first
-    # Then create symlink so VoiceFixer finds it
+    # If model doesn't exist anywhere, download with progress bar
     if not our_ckpt.exists() and not expected_ckpt.exists():
-        print(f"[FL ClearVoice] VoiceFixer model will download to: {our_vf_dir}")
+        print(f"[FL ClearVoice] Downloading VoiceFixer model to: {our_vf_dir}")
         # Create our directory structure
         our_ckpt_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create symlink before download so VoiceFixer downloads to our location
+        # Download with progress bar
+        try:
+            import importlib.util
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            download_utils_path = os.path.join(current_dir, "download_utils.py")
+
+            if os.path.exists(download_utils_path):
+                spec = importlib.util.spec_from_file_location("download_utils", download_utils_path)
+                download_utils = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(download_utils)
+
+                download_utils.download_url_with_progress(
+                    url=voicefixer_url,
+                    local_path=our_ckpt,
+                    description="vf.ckpt (VoiceFixer)",
+                    prefix="[FL ClearVoice]"
+                )
+            else:
+                # Fallback to urllib
+                print("[FL ClearVoice] Downloading VoiceFixer model (no progress available)...")
+                import urllib.request
+                urllib.request.urlretrieve(voicefixer_url, str(our_ckpt))
+                print(f"[FL ClearVoice] VoiceFixer model downloaded")
+
+        except Exception as e:
+            print(f"[FL ClearVoice] Download with progress failed: {e}")
+            # Fallback to urllib
+            import urllib.request
+            print("[FL ClearVoice] Downloading VoiceFixer model...")
+            urllib.request.urlretrieve(voicefixer_url, str(our_ckpt))
+            print(f"[FL ClearVoice] VoiceFixer model downloaded")
+
+        # Create symlink so VoiceFixer finds the model
         expected_cache_dir.parent.mkdir(parents=True, exist_ok=True)
         try:
             if expected_cache_dir.is_symlink():

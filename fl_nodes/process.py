@@ -237,6 +237,59 @@ class FL_ClearVoice_Process:
             if os.path.exists(tmp_output_path):
                 os.unlink(tmp_output_path)
 
+    def _process_novasr(self, model_info: dict, waveform: torch.Tensor, orig_sr: int) -> Tuple[torch.Tensor, int]:
+        """Process audio using NovaSR super-resolution backend."""
+        novasr_model = model_info["model"]
+        device = model_info.get("device", "cpu")
+        input_sr = model_info["input_sample_rate"]   # 16000
+        output_sr = model_info["output_sample_rate"]  # 48000
+
+        # NovaSR requires 16kHz input
+        if orig_sr != input_sr:
+            print(f"[FL ClearVoice] Resampling {orig_sr}Hz -> {input_sr}Hz for NovaSR...")
+            waveform = resample_audio(waveform, orig_sr, input_sr)
+
+        # Convert to mono
+        original_channels = waveform.shape[1]
+        if original_channels > 1:
+            print(f"[FL ClearVoice] Converting {original_channels} channels to mono...")
+            waveform = ensure_mono(waveform)
+
+        # Prepare input tensor for NovaSR
+        # NovaSR expects [batch=1, channels=1, samples] in float16
+        # Our waveform is [batch, channels, samples]
+        input_tensor = waveform.squeeze(0)  # [channels, samples] -> we have [1, samples] after mono
+        if input_tensor.dim() == 1:
+            input_tensor = input_tensor.unsqueeze(0).unsqueeze(0)  # [1, 1, samples]
+        elif input_tensor.dim() == 2:
+            input_tensor = input_tensor.unsqueeze(0)  # [1, channels, samples]
+
+        input_tensor = input_tensor.half().to(device)
+
+        print(f"[FL ClearVoice] Processing with NovaSR (16kHz -> 48kHz)...")
+
+        # Run inference
+        with torch.no_grad():
+            output = novasr_model.infer(input_tensor)
+
+        # Output shape from NovaSR: [batch, samples*3] (channel squeezed, 3x upsampled)
+        # Convert to [channels, samples]
+        if output.dim() == 1:
+            processed_waveform = output.unsqueeze(0)  # [1, samples]
+        else:
+            processed_waveform = output  # [batch, samples] -> use as [1, samples]
+
+        # Ensure 2D shape [channels, samples]
+        if processed_waveform.dim() == 2 and processed_waveform.shape[0] > 1:
+            # Take first batch item if multiple
+            processed_waveform = processed_waveform[0:1]
+
+        # Restore stereo if needed
+        if original_channels > 1:
+            processed_waveform = processed_waveform.repeat(original_channels, 1)
+
+        return processed_waveform.float().cpu(), output_sr
+
     def process_audio(
         self,
         model: dict,
@@ -279,6 +332,8 @@ class FL_ClearVoice_Process:
                 processed_waveform, final_sr = self._process_resemble_enhance(model, waveform, orig_sr)
             elif backend == "voicefixer":
                 processed_waveform, final_sr = self._process_voicefixer(model, waveform, orig_sr)
+            elif backend == "novasr":
+                processed_waveform, final_sr = self._process_novasr(model, waveform, orig_sr)
             else:
                 raise ValueError(f"Unknown backend: {backend}")
 

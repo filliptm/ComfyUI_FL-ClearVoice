@@ -48,3 +48,14 @@ def get_voicefixer_dir() -> Path:
     path = get_clearvoice_models_dir() / "voicefixer"
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def get_novasr_dir() -> Path:
+    """Get the directory for NovaSR models."""
+    path = get_clearvoice_models_dir() / "novasr"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+# Alias for backward compatibility
+get_clearvoice_base_dir = get_clearvoice_models_dir

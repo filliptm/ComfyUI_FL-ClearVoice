@@ -26,6 +26,7 @@ if cv_paths is None:
 get_clearvoice_models_dir = cv_paths.get_clearvoice_models_dir
 get_clearvoice_backend_dir = cv_paths.get_clearvoice_backend_dir
 get_voicefixer_dir = cv_paths.get_voicefixer_dir
+get_novasr_dir = cv_paths.get_novasr_dir
 
 
 def _patch_clearvoice_sr_decode():
@@ -292,7 +293,7 @@ _CHECKPOINT_PATCH_APPLIED = _patch_clearvoice_checkpoint_dir()
 # - target_speaker_extraction: for TSE models
 TASK_MODELS = {
     "speech_enhancement": ["MossFormer2_SE_48K", "FRCRN_SE_16K", "MossFormerGAN_SE_16K"],
-    "speech_super_resolution": ["MossFormer2_SR_48K"],
+    "speech_super_resolution": ["MossFormer2_SR_48K", "NovaSR"],
 }
 
 # Model libraries/backends
@@ -302,6 +303,8 @@ MODEL_BACKEND = {
     "FRCRN_SE_16K": "clearvoice",
     "MossFormerGAN_SE_16K": "clearvoice",
     "MossFormer2_SR_48K": "clearvoice",
+    # NovaSR model
+    "NovaSR": "novasr",
     # Resemble-Enhance models
     "Resemble_Enhance": "resemble_enhance",
     "Resemble_Denoise": "resemble_enhance",
@@ -316,6 +319,8 @@ ALL_MODELS = [
     "FRCRN_SE_16K",
     "MossFormerGAN_SE_16K",
     "MossFormer2_SR_48K",
+    # NovaSR
+    "NovaSR",
     # Resemble-Enhance
     "Resemble_Enhance",
     "Resemble_Denoise",
@@ -329,6 +334,8 @@ MODEL_SAMPLE_RATES = {
     "FRCRN_SE_16K": {"input": 16000, "output": 16000},
     "MossFormerGAN_SE_16K": {"input": 16000, "output": 16000},
     "MossFormer2_SR_48K": {"input": None, "output": 48000},
+    # NovaSR: 16kHz -> 48kHz super-resolution
+    "NovaSR": {"input": 16000, "output": 48000},
     # Resemble-Enhance works at 44.1kHz
     "Resemble_Enhance": {"input": 44100, "output": 44100},
     "Resemble_Denoise": {"input": 44100, "output": 44100},
@@ -337,7 +344,7 @@ MODEL_SAMPLE_RATES = {
 }
 
 # Models that do super-resolution (bandwidth extension)
-SR_MODELS = ["MossFormer2_SR_48K"]
+SR_MODELS = ["MossFormer2_SR_48K", "NovaSR"]
 
 # Models that do full restoration (denoise + enhance + bandwidth extension)
 RESTORATION_MODELS = ["Resemble_Enhance", "VoiceFixer"]
@@ -749,6 +756,183 @@ def get_voicefixer_model(
     return model_info
 
 
+def _download_novasr_model():
+    """
+    Download NovaSR model from HuggingFace with progress bar.
+
+    Returns:
+        Path to the downloaded model file
+    """
+    model_dir = get_novasr_dir()
+    model_path = model_dir / "pytorch_model.bin"
+
+    if model_path.exists():
+        return model_path
+
+    print(f"[FL ClearVoice] Downloading NovaSR model to: {model_dir}")
+    model_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        # Use our download utility
+        import importlib.util
+        import os
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        download_utils_path = os.path.join(current_dir, "download_utils.py")
+
+        if os.path.exists(download_utils_path):
+            spec = importlib.util.spec_from_file_location("download_utils", download_utils_path)
+            download_utils = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(download_utils)
+
+            downloader = download_utils.MultiFileDownloader(prefix="[FL ClearVoice]")
+            downloader.download_hf_files(
+                repo_id="YatharthS/NovaSR",
+                filenames=["pytorch_model.bin"],
+                local_dir=model_dir
+            )
+        else:
+            # Fallback to huggingface_hub
+            from huggingface_hub import hf_hub_download
+            hf_hub_download(
+                repo_id="YatharthS/NovaSR",
+                filename="pytorch_model.bin",
+                local_dir=str(model_dir)
+            )
+    except Exception as e:
+        print(f"[FL ClearVoice] Download failed: {e}")
+        raise
+
+    return model_path
+
+
+def get_novasr_model(force_reload: bool = False) -> Dict[str, Any]:
+    """
+    Get or load NovaSR model.
+
+    NovaSR is an ultra-lightweight audio super-resolution model that
+    upsamples 16kHz audio to 48kHz.
+
+    Args:
+        force_reload: Force reload even if cached
+
+    Returns:
+        Dict with model info
+    """
+    global _MODEL_CACHE
+
+    cache_key = "novasr"
+
+    # Return cached if available
+    if not force_reload and cache_key in _MODEL_CACHE:
+        cached = _MODEL_CACHE[cache_key]
+        if cached.get("model") is not None:
+            print(f"[FL ClearVoice] Using cached NovaSR model")
+            return cached
+
+    print(f"[FL ClearVoice] Loading NovaSR model...")
+
+    # Download model if needed
+    model_path = _download_novasr_model()
+
+    # Determine device
+    # NovaSR has conv1d operations that can exceed MPS channel limits with longer audio
+    # Force CPU on Mac to avoid "Output channels > 65536 not supported" error
+    if torch.cuda.is_available():
+        device = "cuda"
+    elif torch.backends.mps.is_available():
+        device = "cpu"  # Force CPU on MPS due to conv1d channel limit
+        print(f"[FL ClearVoice] MPS detected - NovaSR will use CPU (MPS conv1d channel limit)")
+    else:
+        device = "cpu"
+
+    # Load using our local fl_novasr module
+    try:
+        import importlib.util
+        import os
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        fl_novasr_dir = os.path.join(current_dir, "fl_novasr")
+
+        # Load submodules first to enable relative imports
+        # Load commons
+        commons_path = os.path.join(fl_novasr_dir, "commons.py")
+        commons_spec = importlib.util.spec_from_file_location(
+            "fl_novasr.commons", commons_path,
+            submodule_search_locations=[fl_novasr_dir]
+        )
+        commons_module = importlib.util.module_from_spec(commons_spec)
+        sys.modules["fl_novasr.commons"] = commons_module
+        commons_spec.loader.exec_module(commons_module)
+
+        # Load activations
+        activations_path = os.path.join(fl_novasr_dir, "activations.py")
+        activations_spec = importlib.util.spec_from_file_location(
+            "fl_novasr.activations", activations_path,
+            submodule_search_locations=[fl_novasr_dir]
+        )
+        activations_module = importlib.util.module_from_spec(activations_spec)
+        sys.modules["fl_novasr.activations"] = activations_module
+        activations_spec.loader.exec_module(activations_module)
+
+        # Load resample
+        resample_path = os.path.join(fl_novasr_dir, "resample.py")
+        resample_spec = importlib.util.spec_from_file_location(
+            "fl_novasr.resample", resample_path,
+            submodule_search_locations=[fl_novasr_dir]
+        )
+        resample_module = importlib.util.module_from_spec(resample_spec)
+        sys.modules["fl_novasr.resample"] = resample_module
+        resample_spec.loader.exec_module(resample_module)
+
+        # Load speechsr
+        speechsr_path = os.path.join(fl_novasr_dir, "speechsr.py")
+        speechsr_spec = importlib.util.spec_from_file_location(
+            "fl_novasr.speechsr", speechsr_path,
+            submodule_search_locations=[fl_novasr_dir]
+        )
+        speechsr_module = importlib.util.module_from_spec(speechsr_spec)
+        sys.modules["fl_novasr.speechsr"] = speechsr_module
+        speechsr_spec.loader.exec_module(speechsr_module)
+
+        # Load main module
+        init_path = os.path.join(fl_novasr_dir, "__init__.py")
+        spec = importlib.util.spec_from_file_location(
+            "fl_novasr", init_path,
+            submodule_search_locations=[fl_novasr_dir]
+        )
+        fl_novasr = importlib.util.module_from_spec(spec)
+        sys.modules["fl_novasr"] = fl_novasr
+        spec.loader.exec_module(fl_novasr)
+
+        # Create model instance
+        model = fl_novasr.FastSR(ckpt_path=str(model_path), device=device)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise RuntimeError(f"Failed to load NovaSR model: {e}")
+
+    print(f"[FL ClearVoice] NovaSR will use device: {device}")
+
+    # Get sample rate info
+    sample_rates = MODEL_SAMPLE_RATES.get("NovaSR", {"input": 16000, "output": 48000})
+
+    # Create model info dict
+    model_info = {
+        "model": model,
+        "backend": "novasr",
+        "model_name": "NovaSR",
+        "device": device,
+        "input_sample_rate": sample_rates["input"],
+        "output_sample_rate": sample_rates["output"],
+    }
+
+    # Cache it
+    _MODEL_CACHE[cache_key] = model_info
+
+    print(f"[FL ClearVoice] NovaSR loaded successfully!")
+    return model_info
+
+
 def get_model(
     model_name: str,
     force_reload: bool = False
@@ -782,6 +966,9 @@ def get_model(
 
     elif backend == "voicefixer":
         return get_voicefixer_model(force_reload=force_reload)
+
+    elif backend == "novasr":
+        return get_novasr_model(force_reload=force_reload)
 
     else:
         raise ValueError(f"Unknown backend: {backend} for model: {model_name}")
